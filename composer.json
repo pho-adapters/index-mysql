@@ -1,5 +1,5 @@
 {
-  "name": "pho-adapters/index-mysql",
+  "name": "poratuk/index-mysql",
   "type": "library",
   "description": "MySQL adapter for indexing data from nodes and edges of graphs for the Phở stack.",
   "homepage": "https://phonetworks.org",
