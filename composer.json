@@ -1,0 +1,25 @@
+{
+  "name": "pho-adapters/index-mysql",
+  "type": "library",
+  "description": "MySQL adapter for indexing data from nodes and edges of graphs for the Phở stack.",
+  "homepage": "https://phonetworks.org",
+  "license": "MIT",
+  "authors": [
+        {
+            "name": "Emre Sokullu",
+            "email": "emre@phonetworks.org",
+            "homepage": "http://www.emresokullu.com"
+        }
+    ],
+    "require": {
+        "php":"^7.1"
+    },
+    "provide": {
+        "phonetworks/service-storage-implementation": "1.0"
+    },
+    "autoload": {
+         "psr-4": {
+               "Pho\\Kernel\\Services\\Index\\Adapters\\": ""
+         }
+    }
+}
