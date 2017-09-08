@@ -3,12 +3,14 @@ Pho adapter for Index service based on MySQL database
 
 # Configuration
 Servise use default values as: 
-Host: `localhost`
-Port: `3306`
-User: `root`
-Password: `(empty)`
-Database: `phoindex`
-Table: `indexes`
+Value            |                               
+-------------------------------------------------------------
+Host:            | `localhost`
+Port:            | `3306`
+User:            | `root`
+Password:        | `(empty)`
+Database:        | `phoindex`
+Table:           | `indexes`
 
 
 You can change this in two way:
