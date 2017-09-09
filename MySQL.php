@@ -55,9 +55,10 @@ class MySQL implements IndexInterface, ServiceInterface
     public function __construct(Kernel $kernel, array $params = [])
     {
         $this->kernel = $kernel;
-        $this->connectDatabase($params);
+        if ($this->connectDatabase($params)) {
+            $kernel->on('kernel.booted_up', array($this, 'kernelBooted'));
+        }
 
-        $kernel->on('kernel.booted_up', array($this, 'kernelBooted'));
     }
 
     /**
@@ -70,11 +71,22 @@ class MySQL implements IndexInterface, ServiceInterface
      */
     public function index(EntityInterface $entity, bool $new = false): void
     {
+        if ( ! $this->client) return;
+
         $classes = [get_class($entity) => get_class($entity)] + class_parents($entity);
-        if ($new) {
-            $this->addToIndex($entity->id()->toString(), $entity->attributes()->toArray(), $classes);
-        } else {
-            $this->editInIndex($entity->id()->toString(), $entity->attributes()->toArray(), $classes);
+
+        $insert = [];
+        if ($new == false) {
+            $this->client->query('DELETE FROM `'.$this->table.'` WHERE `uuid` = '.$this->client->escape_string($entity->id()->toSring());
+        }
+        foreach ($entity->attributes()->toArray() as $key => $value) {
+            $insert[] = '('.$this->client->escape_string($entity->id()->toSring().','
+                        .$this->client->escape_string(new \ReflectionClass($entity)->getShortName()).','
+                        .$this->client->escape_string($key).','
+                        .$this->client->escape_string($value).')';
+        }
+        if ( ! empty($insert)) {
+            $this->client->query('INSERT INTO `'.$this->table.'` (`uuid`, `class`, `key`, `value`) VALUES '. implode(',', $insert));
         }
     }
 
@@ -89,7 +101,34 @@ class MySQL implements IndexInterface, ServiceInterface
      */
     public function search(string $value, string $key = null, array $classes = array()): array
     {
-        return $this->searchInIndex($value, $key, $classes);
+        if ( ! $this->client) return null;
+
+        $query = [];
+        if ( ! empty($value)) {
+            $where[] = ' `value` = '.$this->client->escape_string($value);
+        }
+        if ( ! empty($key)) {
+            $where[] = ' `key` = '.$this->client->escape_string($key);
+        }
+
+        if ( ! empty($classes)) {
+            if (is_string($classes)) {
+                $where[] = ' `class` = '.$this->client->escape_string($key);
+            } else if (is_array($classes)) {
+                $cls = [];
+                foreach ($classes as $class) {
+                    $cls[] = $this->client->escape_string($class);
+                }
+                $where[] = '`class` IN ('.implode(',', $cls).')';
+            }
+        }
+        $result = $this->client->query('SELECT `uuid` FROM `'.$this->table.'` WHERE '.implode(' AND ', $where) . ' GROUP BY `uuid`');
+        $ids = [];
+        while ($row = $result->fetch_assoc()) {
+            $ids[] = $row['uuid'];
+        }
+        
+        return $ids;
     }
 
     /**
@@ -105,150 +144,8 @@ class MySQL implements IndexInterface, ServiceInterface
      */
     public function searchFlat(string $value, string $key = "", array $classes = array()): array
     {
-        return [];
-    }
+        if ( ! $this->client) return null;
 
-    /**
-     * Function must return mysqli connection for database
-     */
-    private function connectDatabase($params)
-    {
-        if (!function_exists('mysqli_connect()')) {
-            $this->kernel->logger()->warn('MySQLi extention not installed. Index not working.');
-            return;
-        }
-
-        $parsed = parse_str($params['query'] ?: '');
-        $db     = $parsed['database'] ?: 'phonetworkstest';
-
-        $this->host    = getenv('INDEX_HOST') ?: $params['host'] ?: 'localhost';
-        $this->port    = getenv('INDEX_PORT') ?: $params['port'] ?: 3306;
-        $this->user    = getenv('INDEX_USER') ?: $params['user'] ?: 'root';
-        $this->pass    = getenv('INDEX_PASS') ?: $params['pass'] ?: '';
-        $this->dbname  = getenv('INDEX_DB') ?: $params['database'] ?: $this->dbname;
-
-        $this->client = new \mysqli($this->host, $this->user, $this->pass, '', $this->port);
-
-        if (!$this->client) {
-            $this->kernel->logger()->Warning("Could not connect to the MySQL database %s", $this->dbname);
-            return; 
-        }
-        if (!$this->client()) {
-            $this->client->select_db($db);
-        }
-
-        if($result = $this->client->query("SHOW TABLES LIKE 'index'")){
-            if ($result->num_rows < 1) {
-                $result = $this->client->query("CREATE TABLE `index`( `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `uuid` VARCHAR(30) NOT NULL, `class` VARCHAR(255) NOT NULL, PRIMARY KEY (`id`) ) ENGINE=INNODB; ");
-                var_dump($result);
-            }
-        }
-
-        if($result = $this->client->query("SHOW TABLES LIKE 'values'")){
-            if ($result->num_rows < 1) {
-                $result = $this->client->query("CREATE TABLE `values`( `id` BIGINT UNSIGNED NOT NULL, `key` VARCHAR(255) NOT NULL, `value` MEDIUMTEXT NOT NULL, PRIMARY KEY (`id`, `key`), FOREIGN KEY (`id`) REFERENCES `index`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE ) ENGINE=INNODB;");
-                var_dump($result);
-            }
-        }
-
-
-        if ($this->checkTable() === false) {
-            $this->kernel->logger()->Warning("Could not create MySQL table %s", $this->dbtable);
-        }
-    }
-
-    public function kernelBooted()
-    {
-        var_dump('Kernel booted');
-        $this->kernel->graph()->on('node.added', array($this, 'index'));
-    }
-
-    /**
-     * Bulk insert params of entity to the index
-     * @param string $id     uuid of entity
-     * @param array  $params array of params with key => value structure (toArray() method)
-     * @param array  $classes classes of the current entity
-     */
-    private function addToIndex(string $id, array $params, array $classes = []): void
-    {
-        $body = ['attr' => [], 'classes' => $classes, 'id' => $id];
-        foreach ($params as $key => $value) {
-            $body['attr'][] = ['k' => $key, 'v' => (string) $value];
-        }
-        $class = $this->getTypeFromClass($classes);
-
-        $query = $this->createQuery($class, $id, $body);
-        $this->client->index($query);
-    }
-
-    /**
-     * Updating existing entity attributes to the Indexing DB
-     * @param  string $id      uuid/id of entity
-     * @param  array  $results array of attributes with key => value structure (toArray() method)
-     * @param array  $classes classes of the current entity
-     */
-    private function editInIndex(string $id, array $params, array $classes = []): void
-    {
-        //If node not founded in index - add it.
-        $founded = $this->searchById($id);
-        if (!empty($founded)) {
-            $type = $this->getTypeFromClass($founded['classes']);
-            $this->removeById($type, $id);
-        }
-
-        //Update document if node are exists
-        $body = ['attr' => [], 'classes' => $classes];
-        foreach ($params as $key => $value) {
-            $body['attr'][] = ['k' => $key, 'v' => (string) $value];
-        }
-
-        $params = $this->createQuery($this->getTypeFromClass($classes), $id, $body);
-        $this->client->index($params);
-    }
-
-    /**
-     * Search in indexing DB all attributes of entity by its ID
-     * @param  string $id uuid string
-     * @return array     array with keys id, key, value
-     */
-    private function searchById(string $id): array
-    {
-        try {
-            $query  = ['query' => ['match' => ['id' => $id]]];
-            $params = $this->createQuery(null, null, $query);
-
-            $results = $this->client->search($params);
-        } catch (Elasticsearch\Common\Exceptions\TransportException $e) {
-            return false;
-        } catch (Elasticsearch\Common\Exceptions\Missing404Exception $e) {
-            return false;
-        }
-        $founded = $this->remapReturn($results);
-        if (isset($founded[0])) {
-            return $founded[0];
-        } else {
-            return $founded;
-        }
-    }
-
-    /**
-     * Search in indexing DB all attributes of entity by its ID
-     * @param  string $id uuid string
-     * @return array     array with keys id, key, value
-     */
-    private function removeById(string $type, string $id): array
-    {
-        $params = $this->createQuery($type, $id, false);
-        return $this->client->delete($params);
-    }
-
-    /**
-     * Search by some params
-     * @param  string $id uuid string
-     * @return array     array with keys id, key, value
-     */
-    private function searchInIndex(string $value, string $key = null, array $classes = array()): array
-    {
         $query                                               = ['query' => ['bool' => ['must' => []]]];
         $query['query']['bool']['must'][]['match']['attr.v'] = $value;
         if (!is_null($key)) {
@@ -260,6 +157,62 @@ class MySQL implements IndexInterface, ServiceInterface
         return $this->getIdsList($this->remapReturn($results));
     }
 
+    /**
+     * Function must return mysqli connection for database
+     */
+    private function connectDatabase($params)
+    {
+        if (!function_exists('mysqli_connect()')) {
+            $this->kernel->logger()->warn('MySQLi extention not installed. Index not working.');
+            return false;
+        }
+
+        $query = parse_str($params['query'] ?: '');
+
+        $this->host     = isset($params['host']) ? $params['host'] : ini_get("mysqli.default_host");
+        $this->user     = isset($params['user']) ? $params['user'] : ini_get("mysqli.default_user");
+        $this->pass     = isset($params['pass']) ? $params['pass'] : ini_get("mysqli.default_pw");
+        $this->port     = isset($params['port']) ? $params['port'] : ini_get("mysqli.default_port");
+        $this->database = isset($query['database']) ? $query['database'] : '';
+        $this->table    = isset($query['table']) ? $query['table'] : 'index';
+
+        if ( ! empty($this->host) ||  ! empty($this->user) ||  ! empty($this->pass) ||  ! empty($this->host) || ) {
+            $this->kernel->logger()->warn('MySQLi extention not installed. Index not working.');
+            return false;
+        }
+
+        $this->client = new \mysqli($this->host, $this->user, $this->pass, '', $this->port);
+
+        if (!$this->client) {
+            $this->kernel->logger()->Warning("Could not connect to the MySQL database %s", $this->dbname);
+            return false; 
+        }
+        if (!$this->client()) {
+            $this->client->select_db($db);
+        }
+
+        $this->client->query("CREATE TABLE IF NOT EXISTS `'.$this->table.'`( `uuid` VARCHAR(36) NOT NULL, `class` VARCHAR(255) NOT NULL, `key` VARCHAR(255) NOT NULL, `value` MEDIUMTEXT NOT NULL, INDEX (`uuid`, `class`) ) ENGINE=MYISAM;");
+
+       if($result = $this->client->query("SHOW TABLES LIKE `'.$this->table.'`")){
+            if ($result->num_rows < 1) {
+                $this->kernel->logger()->Warning("Could not create MySQL table %s", $this->dbtable);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public function kernelBooted()
+    {
+        var_dump('Kernel booted');
+        $this->kernel->graph()->on('node.added', array($this, 'index'));
+    }
+
+    /**
+     * Get current main class 
+     * @param  [type] $classes [description]
+     * @return [type]          [description]
+     */
     public function getTypeFromClass($classes)
     {
         $type  = 'entity';
@@ -274,7 +227,7 @@ class MySQL implements IndexInterface, ServiceInterface
         }
 
         if ($class) {
-            $type = substr($class, strrpos($class, '\\') + 1);
+            $type = new \ReflectionClass($class)->getShortName();
         }
 
         return $type;
