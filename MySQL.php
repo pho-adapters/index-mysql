@@ -36,7 +36,6 @@ class MySQL implements IndexInterface, ServiceInterface
      */
     protected $mysqli;
 
-
     /**
      * Db connection data
      */
@@ -71,22 +70,24 @@ class MySQL implements IndexInterface, ServiceInterface
      */
     public function index(EntityInterface $entity, bool $new = false): void
     {
-        if ( ! $this->client) return;
+        if (!$this->client) {
+            return;
+        }
 
         $classes = [get_class($entity) => get_class($entity)] + class_parents($entity);
 
         $insert = [];
         if ($new == false) {
-            $this->client->query('DELETE FROM `'.$this->table.'` WHERE `uuid` = '.$this->client->escape_string($entity->id()->toSring());
+            $this->client->query(sprintf('DELETE FROM `%s` WHERE uuid = %s', $this->table, $this->client->escape_string($entity->id()->toSring())));
         }
         foreach ($entity->attributes()->toArray() as $key => $value) {
-            $insert[] = '('.$this->client->escape_string($entity->id()->toSring().','
-                        .$this->client->escape_string(new \ReflectionClass($entity)->getShortName()).','
-                        .$this->client->escape_string($key).','
-                        .$this->client->escape_string($value).')';
+            $insert[] = '(' . $this->client->escape_string($entity->id()->toSring()) . ','
+            . $this->client->escape_string(new \ReflectionClass($entity)->getShortName()) . ','
+            . $this->client->escape_string($key) . ','
+            . $this->client->escape_string($value) . ')';
         }
-        if ( ! empty($insert)) {
-            $this->client->query('INSERT INTO `'.$this->table.'` (`uuid`, `class`, `key`, `value`) VALUES '. implode(',', $insert));
+        if (!empty($insert)) {
+            $this->client->query(sprintf('INSERT INTO `%s` (`uuid`, `class`, `key`, `value`) VALUES ', $this->table, implode(',', $insert)));
         }
     }
 
@@ -101,33 +102,35 @@ class MySQL implements IndexInterface, ServiceInterface
      */
     public function search(string $value, string $key = null, array $classes = array()): array
     {
-        if ( ! $this->client) return null;
+        if (!$this->client) {
+            return null;
+        }
 
         $query = [];
-        if ( ! empty($value)) {
-            $where[] = ' `value` = '.$this->client->escape_string($value);
+        if (!empty($value)) {
+            $where[] = ' `value` = ' . $this->client->escape_string($value);
         }
-        if ( ! empty($key)) {
-            $where[] = ' `key` = '.$this->client->escape_string($key);
+        if (!empty($key)) {
+            $where[] = ' `key` = ' . $this->client->escape_string($key);
         }
 
-        if ( ! empty($classes)) {
+        if (!empty($classes)) {
             if (is_string($classes)) {
-                $where[] = ' `class` = '.$this->client->escape_string($key);
+                $where[] = ' `class` = ' . $this->client->escape_string($key);
             } else if (is_array($classes)) {
                 $cls = [];
                 foreach ($classes as $class) {
                     $cls[] = $this->client->escape_string($class);
                 }
-                $where[] = '`class` IN ('.implode(',', $cls).')';
+                $where[] = '`class` IN (' . implode(',', $cls) . ')';
             }
         }
-        $result = $this->client->query('SELECT `uuid` FROM `'.$this->table.'` WHERE '.implode(' AND ', $where) . ' GROUP BY `uuid`');
-        $ids = [];
+        $result = $this->client->query(sprintf('SELECT `uuid` FROM `%s` WHERE %s GROUP BY `uuid`', $this->table, implode(' AND ', $where)));
+        $ids    = [];
         while ($row = $result->fetch_assoc()) {
             $ids[] = $row['uuid'];
         }
-        
+
         return $ids;
     }
 
@@ -144,7 +147,9 @@ class MySQL implements IndexInterface, ServiceInterface
      */
     public function searchFlat(string $value, string $key = "", array $classes = array()): array
     {
-        if ( ! $this->client) return null;
+        if (!$this->client) {
+            return null;
+        }
 
         $query                                               = ['query' => ['bool' => ['must' => []]]];
         $query['query']['bool']['must'][]['match']['attr.v'] = $value;
@@ -169,14 +174,14 @@ class MySQL implements IndexInterface, ServiceInterface
 
         $query = parse_str($params['query'] ?: '');
 
-        $this->host     = isset($params['host']) ? $params['host'] : ini_get("mysqli.default_host");
-        $this->user     = isset($params['user']) ? $params['user'] : ini_get("mysqli.default_user");
-        $this->pass     = isset($params['pass']) ? $params['pass'] : ini_get("mysqli.default_pw");
-        $this->port     = isset($params['port']) ? $params['port'] : ini_get("mysqli.default_port");
-        $this->database = isset($query['database']) ? $query['database'] : '';
-        $this->table    = isset($query['table']) ? $query['table'] : 'index';
+        $this->host     = !empty($params['host']) ? $params['host'] : ini_get("mysqli.default_host");
+        $this->user     = !empty($params['user']) ? $params['user'] : ini_get("mysqli.default_user");
+        $this->pass     = !empty($params['pass']) ? $params['pass'] : ini_get("mysqli.default_pw");
+        $this->port     = !empty($params['port']) ? (int) $params['port'] : ini_get("mysqli.default_port");
+        $this->database = !empty($query['database']) ? $query['database'] : '';
+        $this->table    = !empty($query['table']) ? $query['table'] : 'index';
 
-        if ( ! empty($this->host) ||  ! empty($this->user) ||  ! empty($this->pass) ||  ! empty($this->host) || ) {
+        if (!empty($this->host) || !empty($this->user) || !empty($this->pass) || !empty($this->database) || ) {
             $this->kernel->logger()->warn('MySQLi extention not installed. Index not working.');
             return false;
         }
@@ -185,16 +190,16 @@ class MySQL implements IndexInterface, ServiceInterface
 
         if (!$this->client) {
             $this->kernel->logger()->Warning("Could not connect to the MySQL database %s", $this->dbname);
-            return false; 
+            return false;
         }
         if (!$this->client()) {
             $this->client->select_db($db);
         }
 
-        $this->client->query("CREATE TABLE IF NOT EXISTS `'.$this->table.'`( `uuid` VARCHAR(36) NOT NULL, `class` VARCHAR(255) NOT NULL, `key` VARCHAR(255) NOT NULL, `value` MEDIUMTEXT NOT NULL, INDEX (`uuid`, `class`) ) ENGINE=MYISAM;");
+        $this->client->query(sprintf("CREATE TABLE IF NOT EXISTS `%s`( `uuid` VARCHAR(36) NOT NULL, `class` VARCHAR(255) NOT NULL, `key` VARCHAR(255) NOT NULL, `value` MEDIUMTEXT NOT NULL, INDEX (`uuid`, `class`) ) ENGINE=MYISAM;", $this->table));
 
-       if($result = $this->client->query("SHOW TABLES LIKE `'.$this->table.'`")){
-            if ($result->num_rows < 1) {
+        if ($result = $this->client->query(sprintf("SHOW TABLES LIKE `%s`", $this->table))) {
+            if ($result->num_rows == 0) {
                 $this->kernel->logger()->Warning("Could not create MySQL table %s", $this->dbtable);
                 return false;
             }
@@ -209,7 +214,7 @@ class MySQL implements IndexInterface, ServiceInterface
     }
 
     /**
-     * Get current main class 
+     * Get current main class
      * @param  [type] $classes [description]
      * @return [type]          [description]
      */
