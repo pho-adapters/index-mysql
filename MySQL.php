@@ -193,7 +193,7 @@ class MySQL implements IndexInterface, ServiceInterface
             return false;
         }
 
-        $this->client->query(sprintf("CREATE TABLE IF NOT EXISTS `%s`( `uuid` VARCHAR(36) NOT NULL, `class` VARCHAR(255) NOT NULL, `key` VARCHAR(255) NOT NULL, `value` MEDIUMTEXT NOT NULL, INDEX (`uuid`, `class`) ) ENGINE=MYISAM;", $this->table));
+        $this->client->query(sprintf("CREATE TABLE IF NOT EXISTS `%s`( `uuid` VARCHAR(32) NOT NULL, `class` VARCHAR(255) NOT NULL, `key` VARCHAR(255) NOT NULL, `value` MEDIUMTEXT NOT NULL, INDEX (`uuid`, `class`) ) ENGINE=INNODB;", $this->table));
 
         if ($result = $this->client->query(sprintf("SHOW TABLES LIKE `%s`", $this->table))) {
             if ($result->num_rows == 0) {
@@ -203,12 +203,6 @@ class MySQL implements IndexInterface, ServiceInterface
         }
 
         return true;
-    }
-
-    public function kernelBooted()
-    {
-        var_dump('Kernel booted');
-        $this->kernel->graph()->on('node.added', array($this, 'index'));
     }
 
     /**
