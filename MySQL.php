@@ -193,7 +193,7 @@ class MySQL implements IndexInterface, ServiceInterface
             return false;
         }
 
-        $this->client->query(sprintf("CREATE TABLE IF NOT EXISTS `%s`( `uuid` VARCHAR(32) NOT NULL, `class` VARCHAR(255) NOT NULL, `key` VARCHAR(255) NOT NULL, `value` MEDIUMTEXT NOT NULL, INDEX (`uuid`, `class`) ) ENGINE=INNODB;", $this->table));
+        $this->client->query(sprintf("CREATE TABLE IF NOT EXISTS `%s`( `uuid` VARCHAR(32) NOT NULL, `class` VARCHAR(255) NOT NULL, `key` VARCHAR(255) NOT NULL, `value` TEXT NOT NULL, INDEX (`uuid`, `class`) ) ENGINE=INNODB;", $this->table));
 
         if ($result = $this->client->query(sprintf("SHOW TABLES LIKE `%s`", $this->table))) {
             if ($result->num_rows == 0) {
