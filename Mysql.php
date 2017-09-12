@@ -55,10 +55,7 @@ class Mysql implements IndexInterface, ServiceInterface
     public function __construct(Kernel $kernel, array $params = [])
     {
         $this->kernel = $kernel;
-        if ($this->connectDatabase($params)) {
-            $kernel->on('kernel.booted_up', array($this, 'kernelBooted'));
-        }
-
+        $this->connectDatabase($params);
     }
 
     /**
