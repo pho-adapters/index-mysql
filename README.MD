@@ -14,7 +14,7 @@ composer require pho-adapters/index-mysql
 ## Setup database
 Database must include table with this structure:
 ```
-CREATE TABLE IF NOT EXISTS `index` ( 
+CREATE TABLE IF NOT EXISTS `kernel_index` ( 
     `uuid` VARCHAR(32) NOT NULL, 
     `class` VARCHAR(255) NOT NULL, 
     `key` VARCHAR(255) NOT NULL, 
@@ -34,7 +34,7 @@ Port            | 3306
 User            | root
 Password        | (empty)
 Database        | phoindex
-Table           | indexes
+Table           | kernel_index
 
 You can change this parameters in two way:
 ##### A) In config: 

@@ -44,7 +44,7 @@ class Mysql implements IndexInterface, ServiceInterface
     private $user;
     private $pass;
     private $dbname = 'phonetworks';
-    private $table  = 'index';
+    private $table  = 'kernel_index';
 
     /**
      * Setup function.
@@ -183,8 +183,8 @@ class Mysql implements IndexInterface, ServiceInterface
         $this->user     = !empty($params['user']) ? $params['user'] : ini_get("mysqli.default_user");
         $this->pass     = isset($params['pass']) ? $params['pass'] : ini_get("mysqli.default_pw");
         $this->port     = isset($params['port']) ? (int) $params['port'] : ini_get("mysqli.default_port");
-        $this->database = !empty($query['database']) ? $query['database'] : '';
-        $this->table    = !empty($query['table']) ? $query['table'] : 'index';
+        $this->database = !empty($query['database']) ? $query['database'] : $this->database;
+        $this->table    = !empty($query['table']) ? $query['table'] : $this->table;
 
         $this->client = new \mysqli($this->host, $this->user, $this->pass, $this->database, $this->port);
 
@@ -202,7 +202,7 @@ class Mysql implements IndexInterface, ServiceInterface
             }
         }
 
-        return true;
+        return true; 
     }
 
     /**
