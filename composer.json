@@ -6,9 +6,8 @@
   "license": "MIT",
   "authors": [
         {
-            "name": "Emre Sokullu",
-            "email": "emre@phonetworks.org",
-            "homepage": "http://www.emresokullu.com"
+            "name": "Andrii Cherytsya",
+            "email": "poratuk@gmail.com"
         }
     ],
     "require": {
