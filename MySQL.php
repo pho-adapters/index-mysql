@@ -22,7 +22,7 @@ use Pho\Lib\Graph\EntityInterface;
  *
  * @author Emre Sokullu
  */
-class MySQL implements IndexInterface, ServiceInterface
+class Mysql implements IndexInterface, ServiceInterface
 {
     /**
      * Pho-kernel
