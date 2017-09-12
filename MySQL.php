@@ -110,7 +110,7 @@ class MySQL implements IndexInterface, ServiceInterface
 
         $query = [];
         if (!empty($value)) {
-            $where[] = ' `value` = "' . $this->client->escape_string($value) . '"';
+            $where[] = ' `value` LIKE "%' . $this->client->escape_string($value) . '%"';
         }
         if (!empty($key)) {
             $where[] = ' `key` = "' . $this->client->escape_string($key) . '"';
