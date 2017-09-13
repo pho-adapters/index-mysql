@@ -52,3 +52,8 @@ Database:        | INDEX_DB
 Table:           | INDEX_TABLE
 
 Database and table name allowed symbols are `[A-Za-z0-9_$]`
+
+# License
+MIT
+Created for photetworks.net
+Author: Andrii Cherytsya <poratuk@gmail.com>

@@ -3,7 +3,7 @@
 /*
  * This file is part of the Pho package.
  *
- * (c) Emre Sokullu <emre@phonetworks.org>
+ * (c) phonetworks.net
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -20,7 +20,7 @@ use Pho\Lib\Graph\EntityInterface;
  * File based logging. The log files specified at the kernel
  * constructor level or via the *configure* function of the kernel.
  *
- * @author Emre Sokullu
+ * @author Andrii Cherytsya <poratuk@gmail.com>
  */
 class Mysql implements IndexInterface, ServiceInterface
 {
