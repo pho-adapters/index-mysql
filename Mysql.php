@@ -76,19 +76,22 @@ class Mysql implements IndexInterface, ServiceInterface
 
         $insert = [];
         if ($new == false) {
-            $this->client->query(sprintf('DELETE FROM `%s` WHERE uuid = %s', $this->table, $this->client->escape_string($entity->id()->toString())));
+            $remove = $this->client->prepare('DELETE FROM `'.$this->table.'` WHERE uuid = ?');
+            $remove->bind_param('s', $entity->id()->toString());
+            $remove->execute();
+            $remove->close();
         }
+
+        $key = ''; 
+        $value = '';
+
+        $insert = $this->client->prepare('INSERT INTO `'.$this->table.'` (`uuid`, `class`, `key`, `value`) VALUES (?, ?, ?, ?)');
 
         foreach ($entity->attributes()->toArray() as $key => $value) {
-            $insert[] = '("' . $this->client->escape_string($entity->id()->toString()) . '","'
-            . $this->client->escape_string((new \ReflectionClass($entity))->getShortName()) . '","'
-            . $this->client->escape_string($key) . '","'
-            . $this->client->escape_string($value) . '")';
+            $insert->bind_param('ssss', $entity->id()->toString(), (new \ReflectionClass($entity))->getShortName(), $key, $value);
+            $insert->execute();
         }
-
-        if (!empty($insert)) {
-            $this->client->query(sprintf('INSERT INTO `%s` (`uuid`, `class`, `key`, `value`) VALUES %s', $this->table, implode(',', $insert)));
-        }
+        $insert->close();
     }
 
     /**
@@ -106,33 +109,45 @@ class Mysql implements IndexInterface, ServiceInterface
             return [];
         }
 
+        $select = false;
+        if (empty($classes)) {
+            $select = $this->client->prepare('SELECT `uuid` FROM `'.$this->table.'` WHERE `value` = ? AND `key` = ?');
+            $select->bind_param('ss', $value, $key);
+        }
+        $params = [];
         $query = [];
         if (!empty($value)) {
-            $where[] = ' `value` LIKE "%' . $this->client->escape_string($value) . '%"';
+            $where[] = ' `value` LIKE ?';
+            $params[] = "%{$value}%";
         }
         if (!empty($key)) {
-            $where[] = ' `key` = "' . $this->client->escape_string($key) . '"';
+            $where[] = ' `key` = ?';
+            $params[] = $key;
         }
 
         if (!empty($classes)) {
             if (is_string($classes)) {
-                $where[] = ' `class` = "' . $this->client->escape_string($key) . '"';
+                $where[] = ' `class` = ?';
+                $params[] = $classes;
             } else if (is_array($classes)) {
-                $cls = [];
-                foreach ($classes as $class) {
-                    $cls[] = '"' . $this->client->escape_string($class) . '"';
-                }
-                $where[] = '`class` IN (' . implode(',', $cls) . ')';
+                $clause = implode(',', array_fill(0, count($classes), '?'));
+                $where[] = '`class` IN (' . $clause . ')';
+                $params = array_merge($params, $classes);
             }
         }
+        
+        $select = $this->client->prepare('SELECT `uuid` FROM `'.$this->table.'` WHERE '.implode(' AND ', $where).' GROUP BY `uuid`');
+        
+        $select->bind_param(str_repeat('s', count($params)), ...$params);
+        $select->execute();
+        $result = $select->get_result();
+        $select->close();
 
-        $result = $this->client->query(sprintf('SELECT `uuid` FROM `%s` WHERE %s GROUP BY `uuid`', $this->table, implode(' AND ', $where)));
         $ids    = [];
 
         while ($row = $result->fetch_assoc()) {
             $ids[] = $row['uuid'];
         }
-
         return $ids;
     }
 
@@ -181,9 +196,9 @@ class Mysql implements IndexInterface, ServiceInterface
 
         $this->client->set_charset('utf8');
 
-        $this->client->query(sprintf("CREATE TABLE IF NOT EXISTS `%s`( `uuid` VARCHAR(32) NOT NULL, `class` VARCHAR(255) NOT NULL, `key` VARCHAR(255) NOT NULL, `value` TEXT NOT NULL, INDEX (`uuid`, `class`) ) ENGINE=INNODB;", $this->table));
+        $this->client->query("CREATE TABLE IF NOT EXISTS `".$this->table."`( `uuid` VARCHAR(32) NOT NULL, `class` VARCHAR(255) NOT NULL, `key` VARCHAR(255) NOT NULL, `value` TEXT NOT NULL, INDEX (`uuid`, `class`) ) ENGINE=INNODB;");
 
-        if ($result = $this->client->query(sprintf("SHOW TABLES LIKE `%s`", $this->table))) {
+        if ($result = $this->client->query(sprintf("SHOW TABLES LIKE `".$this->table."`"))) {
             if ($result->num_rows == 0) {
                 $this->kernel->logger()->Warning("Could not create MySQL table %s", $this->dbtable);
                 return false;
@@ -221,7 +236,7 @@ class Mysql implements IndexInterface, ServiceInterface
     private function prepareName(string $name)
     {
 
-        return preg_replace('[^A-Za-z0-9_$]*', '', $name);
+        return preg_replace("/[^A-Za-z0-9_$]+/", '', $name);
     }
 
 }
