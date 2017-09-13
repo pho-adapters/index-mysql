@@ -50,3 +50,5 @@ User:            | INDEX_USER
 Password:        | INDEX_PWD
 Database:        | INDEX_DB
 Table:           | INDEX_TABLE
+
+Database and table name allowed symbols are `[A-Za-z0-9_$]`

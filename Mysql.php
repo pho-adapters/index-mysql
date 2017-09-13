@@ -78,6 +78,7 @@ class Mysql implements IndexInterface, ServiceInterface
         if ($new == false) {
             $this->client->query(sprintf('DELETE FROM `%s` WHERE uuid = %s', $this->table, $this->client->escape_string($entity->id()->toString())));
         }
+
         foreach ($entity->attributes()->toArray() as $key => $value) {
             $insert[] = '("' . $this->client->escape_string($entity->id()->toString()) . '","'
             . $this->client->escape_string((new \ReflectionClass($entity))->getShortName()) . '","'
@@ -148,19 +149,7 @@ class Mysql implements IndexInterface, ServiceInterface
      */
     public function searchFlat(string $value, string $key = "", array $classes = array()): array
     {
-        if (!$this->client) {
-            return null;
-        }
-
-        $query                                               = ['query' => ['bool' => ['must' => []]]];
-        $query['query']['bool']['must'][]['match']['attr.v'] = $value;
-        if (!is_null($key)) {
-            $query['query']['bool']['must'][]['match']['attr.k'] = $key;
-        }
-
-        $params  = $this->createQuery(implode(',', (array) $classes), null, $query);
-        $results = $this->client->search($params);
-        return $this->getIdsList($this->remapReturn($results));
+        return [];
     }
 
     /**
@@ -180,8 +169,8 @@ class Mysql implements IndexInterface, ServiceInterface
         $this->user     = !empty($params['user']) ? $params['user'] : ini_get("mysqli.default_user");
         $this->pass     = isset($params['pass']) ? $params['pass'] : ini_get("mysqli.default_pw");
         $this->port     = isset($params['port']) ? (int) $params['port'] : ini_get("mysqli.default_port");
-        $this->database = !empty($query['database']) ? $query['database'] : $this->database;
-        $this->table    = !empty($query['table']) ? $query['table'] : $this->table;
+        $this->database = !empty($query['database']) ? $this->prepareName($query['database']) : $this->database;
+        $this->table    = !empty($query['table']) ? $this->prepareName($query['table']) : $this->table;
 
         $this->client = new \mysqli($this->host, $this->user, $this->pass, $this->database, $this->port);
 
@@ -189,6 +178,8 @@ class Mysql implements IndexInterface, ServiceInterface
             $this->kernel->logger()->warning("Could not connect to the MySQL database %s", $this->dbname);
             return false;
         }
+
+        $this->client->set_charset('utf8');
 
         $this->client->query(sprintf("CREATE TABLE IF NOT EXISTS `%s`( `uuid` VARCHAR(32) NOT NULL, `class` VARCHAR(255) NOT NULL, `key` VARCHAR(255) NOT NULL, `value` TEXT NOT NULL, INDEX (`uuid`, `class`) ) ENGINE=INNODB;", $this->table));
 
@@ -199,7 +190,7 @@ class Mysql implements IndexInterface, ServiceInterface
             }
         }
 
-        return true; 
+        return true;
     }
 
     /**
@@ -225,6 +216,12 @@ class Mysql implements IndexInterface, ServiceInterface
         }
 
         return $type;
+    }
+
+    private function prepareName(string $name)
+    {
+
+        return preg_replace('[^A-Za-z0-9_$]*', '', $name);
     }
 
 }
